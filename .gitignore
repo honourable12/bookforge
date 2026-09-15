@@ -1,0 +1,22 @@
+# Build artifacts
+dist/
+node_modules/
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/Cargo.lock
+
+# Model files (large, fetched via scripts/download_model.ps1)
+src-tauri/model/*.gguf
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Windows-specific
+*.msi
+*.exe.bak
+$RECYCLE.BIN/
