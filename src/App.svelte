@@ -91,7 +91,11 @@
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="ai-resizer" role="separator" aria-orientation="vertical" onmousedown={startResizeAI}></div>
   <div class="ai-wrap" style="width: {aiPanelWidth}px">
-    <AIPanel />
+    <AIPanel
+      onInsertText={(text) => editor?.insertAtCursor(text)}
+      onAppendText={(text) => editor?.appendToDocument(text)}
+      onReplaceText={(text) => editor?.replaceSelection(text)}
+    />
   </div>
 </div>
 

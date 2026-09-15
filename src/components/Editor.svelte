@@ -102,6 +102,20 @@
     scheduleSave();
   }
 
+  export async function appendToDocument(text: string) {
+    if (!view) return;
+    const docLen = view.state.doc.length;
+    const currentDoc = view.state.doc.toString();
+    const needsPrefix = docLen > 0 && !currentDoc.endsWith("\n\n");
+    const prefix = needsPrefix ? (currentDoc.endsWith("\n") ? "\n" : "\n\n") : "";
+    const insertText = prefix + text;
+    view.dispatch({
+      changes: { from: docLen, to: docLen, insert: insertText },
+      selection: { anchor: docLen + insertText.length },
+    });
+    scheduleSave();
+  }
+
   export async function replaceSelection(text: string) {
     if (!view) return;
     const sel = view.state.selection.main;
