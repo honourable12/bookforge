@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
   import { get } from "svelte/store";
   import { marked } from "marked";
   import { api } from "$lib/api";
@@ -32,32 +33,11 @@
 
   let lastMessage = $derived($chatMessages[$chatMessages.length - 1]);
 
-  $effect(() => {
-    void $chatMessages;
-    void $isGenerating;
-    if (chatBody) {
-      requestAnimationFrame(() => {
-        chatBody!.scrollTop = chatBody!.scrollHeight;
-      });
-    }
-  });
-
-  function renderMarkdown(raw: string): string {
-    if (!raw) return "";
-    try {
-      return marked.parse(raw, { gfm: true, breaks: true }) as string;
-    } catch (err) {
-      console.error("Markdown parse error:", err);
-      return raw;
-    }
-  }
-
-  async function ensureListener() {
-    if (unlisten) return;
+  onMount(async () => {
     const { listen } = await import("@tauri-apps/api/event");
     unlisten = await listen<StreamChunk>("ai_chat_chunk", (e) => {
       const p = e.payload;
-      if (p.requestId !== currentRequestId) return;
+      if (!currentRequestId || p.requestId !== currentRequestId) return;
 
       const msgs = get(chatMessages);
       const last = msgs[msgs.length - 1];
@@ -78,6 +58,33 @@
         targetMode = "chat";
       }
     });
+  });
+
+  onDestroy(() => {
+    if (unlisten) {
+      unlisten();
+      unlisten = null;
+    }
+  });
+
+  $effect(() => {
+    void $chatMessages;
+    void $isGenerating;
+    if (chatBody) {
+      requestAnimationFrame(() => {
+        chatBody!.scrollTop = chatBody!.scrollHeight;
+      });
+    }
+  });
+
+  function renderMarkdown(raw: string): string {
+    if (!raw) return "";
+    try {
+      return marked.parse(raw, { gfm: true, breaks: true }) as string;
+    } catch (err) {
+      console.error("Markdown parse error:", err);
+      return raw;
+    }
   }
 
   async function send(mode: "chat" | "editor" = "chat") {
@@ -99,7 +106,6 @@
     isGenerating.set(true);
     currentRequestId = uuid();
 
-    await ensureListener();
     try {
       await api.aiChat(currentRequestId, messages, get(genParams));
     } catch (e) {

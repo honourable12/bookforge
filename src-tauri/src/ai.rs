@@ -148,7 +148,7 @@ fn token_for_str(model: &llama_cpp_2::model::LlamaModel, s: &str) -> i32 {
 /// Returns the full generated text on success.
 pub fn run_completion(
     app: &AppHandle,
-    window: &Window,
+    _window: &Window,
     event_name: &str,
     request_id: &str,
     prompt: &str,
@@ -203,15 +203,6 @@ pub fn run_completion(
 
     let emit = |token_str: &str| {
         let _ = app.emit(
-            event_name,
-            StreamChunk {
-                request_id: request_id.to_string(),
-                token: token_str.to_string(),
-                finish: false,
-                error: None,
-            },
-        );
-        let _ = window.emit(
             event_name,
             StreamChunk {
                 request_id: request_id.to_string(),
