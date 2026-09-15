@@ -185,8 +185,9 @@ pub fn run_completion(
         batch.clear();
         let chunk_end = (idx + n_batch).min(tokens.len());
         for (j, tok) in tokens[idx..chunk_end].iter().enumerate() {
+            let is_last = (idx + j + 1) == tokens.len();
             batch
-                .add(*tok, n_cur + j as i32, &[], true)
+                .add(*tok, n_cur + j as i32, &[0], is_last)
                 .map_err(|e| format!("batch add (prefill): {:?}", e))?;
         }
         ctx.decode(&mut batch)
@@ -222,7 +223,7 @@ pub fn run_completion(
     };
 
     for _ in 0..params.max_tokens {
-        let last = batch.n_tokens() - 1;
+        let last = (batch.n_tokens() - 1) as i32;
         let logits = ctx.get_logits_ith(last);
         let mut logits_vec: Vec<f32> = logits.to_vec();
 
@@ -246,7 +247,7 @@ pub fn run_completion(
 
         batch.clear();
         batch
-            .add(next_tok, n_cur, &[], true)
+            .add(next_tok, n_cur, &[0], true)
             .map_err(|e| format!("batch add (step): {:?}", e))?;
         ctx.decode(&mut batch)
             .map_err(|e| format!("Step decode failed: {:?}", e))?;
@@ -276,4 +277,39 @@ fn pick_argmax(logits: &[f32]) -> i32 {
         }
     }
     best
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chat_prompt_format() {
+        let msgs = vec![ChatMessage {
+            role: "user".to_string(),
+            content: "Hello".to_string(),
+        }];
+        let prompt = build_chat_prompt(&msgs);
+        assert!(prompt.contains("<|im_start|>user\nHello<|im_end|>"));
+        assert!(prompt.contains("<|im_start|>assistant\n"));
+    }
+
+    #[test]
+    fn test_model_decode_step() {
+        if let Ok(model) = get_model() {
+            let backend = model::get_backend();
+            let ctx_params = build_context_params();
+            let mut ctx = model.new_context(backend, ctx_params).expect("context creation");
+            let tokens = model.str_to_token("Hello", AddBos::Always).expect("tokenize");
+            let mut batch = LlamaBatch::new(16, 1);
+            for (i, tok) in tokens.iter().enumerate() {
+                let is_last = i + 1 == tokens.len();
+                batch.add(*tok, i as i32, &[0], is_last).expect("batch add");
+            }
+            ctx.decode(&mut batch).expect("decode prompt");
+            let last = (batch.n_tokens() - 1) as i32;
+            let logits = ctx.get_logits_ith(last);
+            assert!(!logits.is_empty());
+        }
+    }
 }

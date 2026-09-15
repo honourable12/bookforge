@@ -182,8 +182,8 @@ pub fn build_context_params() -> LlamaContextParams {
         .with_n_ubatch(N_BATCH)
         .with_n_threads(n_decode)
         .with_n_threads_batch(n_prefill)
-        .with_type_k(KvCacheType::Q8_0)
-        .with_type_v(KvCacheType::Q8_0)
+        .with_type_k(KvCacheType::F16)
+        .with_type_v(KvCacheType::F16)
         .with_offload_kqv(false)
 }
 
