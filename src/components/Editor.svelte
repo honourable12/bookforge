@@ -139,6 +139,18 @@
     return view.state.sliceDoc(from, sel.from);
   }
 
+  export function getContext(maxChars = 2000): string {
+    if (!view) return "";
+    const sel = view.state.selection.main;
+    if (sel.from > 0) {
+      const from = Math.max(0, sel.from - maxChars);
+      return view.state.sliceDoc(from, sel.from);
+    }
+    const doc = view.state.doc.toString();
+    if (doc.length <= maxChars) return doc;
+    return doc.slice(0, maxChars);
+  }
+
   export async function continueWriting() {
     if ($isGenerating) return;
     const prefix = getPrefix();

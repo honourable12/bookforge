@@ -95,6 +95,7 @@
       onInsertText={(text) => editor?.insertAtCursor(text)}
       onAppendText={(text) => editor?.appendToDocument(text)}
       onReplaceText={(text) => editor?.replaceSelection(text)}
+      getContext={() => editor?.getContext() || ""}
     />
   </div>
 </div>

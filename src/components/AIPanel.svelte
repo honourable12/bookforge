@@ -11,6 +11,8 @@
     modelStatus,
     notify,
     refreshModelStatus,
+    project,
+    activeChapter,
   } from "$lib/stores";
   import type { ChatMessage, StreamChunk } from "$lib/types";
   import { uuid } from "$lib/util";
@@ -19,9 +21,10 @@
     onInsertText?: (text: string) => void;
     onAppendText?: (text: string) => void;
     onReplaceText?: (text: string) => void;
+    getContext?: () => string;
   }
 
-  let { onInsertText, onAppendText, onReplaceText }: Props = $props();
+  let { onInsertText, onAppendText, onReplaceText, getContext }: Props = $props();
 
   let input = $state("");
   let chatBody = $state<HTMLDivElement>();
@@ -99,15 +102,56 @@
     }
 
     targetMode = mode;
-    const userMsg: ChatMessage = { role: "user", content: input.trim() };
-    const messages = [...get(chatMessages), userMsg];
-    chatMessages.set(messages);
+    const rawInput = input.trim();
     input = "";
     isGenerating.set(true);
     currentRequestId = uuid();
 
+    let apiMessages: ChatMessage[];
+
+    if (mode === "editor") {
+      const storySystemMsg: ChatMessage = {
+        role: "system",
+        content: `You are an acclaimed fiction author and creative co-author writing directly into the user's book.
+Your mission is to generate immersive, captivating narrative fiction prose.
+
+MANDATORY RULES:
+1. Write ACTUAL STORY PROSE with scenes, characters, sensory descriptions, character thoughts, and natural dialogue.
+2. NEVER write an essay, chapter outline, bullet points, character breakdown, or summary (e.g. NEVER write "This chapter focuses on...", "Key Elements of Character Development", "Introduction to...", "Phase 1: ...", or "Summary").
+3. NEVER include meta-commentary, conversational remarks, or preamble (e.g. no "Sure, here is the chapter:", "Here is the story:").
+4. Dive straight into the story scene immediately.
+5. Show, don't tell. Write the action and emotion as it unfolds in real time.`,
+      };
+
+      const context = getContext ? getContext().trim() : "";
+      const p = get(project);
+      const chap = get(activeChapter);
+      const bookTitle = p?.meta?.title ? ` for "${p.meta.title}"` : "";
+      const chapTitle = chap?.title ? ` - ${chap.title}` : "";
+
+      let promptContent = "";
+      if (context.length > 30) {
+        promptContent = `[Story Context from current chapter:\n"""\n${context.slice(-1500)}\n"""]\n\nWrite the next story scene continuing seamlessly from the context, following this creative direction: ${rawInput}\n\nBegin the story prose immediately:`;
+      } else {
+        promptContent = `Write an engaging, full narrative story scene${bookTitle}${chapTitle} based on this prompt: "${rawInput}".\n\nBegin the story prose immediately:`;
+      }
+
+      const userMsgForHistory: ChatMessage = { role: "user", content: `✦ Write to Book: ${rawInput}` };
+      chatMessages.set([...get(chatMessages), userMsgForHistory]);
+
+      apiMessages = [
+        storySystemMsg,
+        { role: "user", content: promptContent },
+      ];
+    } else {
+      const userMsg: ChatMessage = { role: "user", content: rawInput };
+      const messages = [...get(chatMessages), userMsg];
+      chatMessages.set(messages);
+      apiMessages = messages;
+    }
+
     try {
-      await api.aiChat(currentRequestId, messages, get(genParams));
+      await api.aiChat(currentRequestId, apiMessages, get(genParams));
     } catch (e) {
       notify("error", `AI chat failed: ${e}`);
       isGenerating.set(false);
