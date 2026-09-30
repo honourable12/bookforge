@@ -1,22 +1,55 @@
 <script lang="ts">
-  import { activeChapter, modelLoaded, modelStatus, project, toast, isGenerating } from "$lib/stores";
+  import {
+    activeChapter,
+    modelLoaded,
+    modelStatus,
+    project,
+    toast,
+    isGenerating,
+    writingStats,
+    view,
+  } from "$lib/stores";
+  import { formatNumber } from "$lib/util";
+
+  let todayWords = $derived($writingStats?.todayWords ?? 0);
+  let dailyGoal = $derived($writingStats?.dailyGoal ?? 500);
+  let goalMet = $derived($writingStats?.todayGoalMet ?? false);
+  let streak = $derived($writingStats?.currentStreak ?? 0);
+  let totalWords = $derived($writingStats?.totalWords ?? 0);
 </script>
 
 <div class="statusbar">
   <div class="left">
     {#if $project}
+      <button class="item link" onclick={() => view.set("library")}>
+        ← Library
+      </button>
+      <span class="sep">·</span>
       <span class="item">{$project.meta.title}</span>
       <span class="sep">·</span>
-      <span class="item">{$project.chapters.length} chapters</span>
-      <span class="sep">·</span>
-      <span class="item mono">{$project.root}</span>
+      <span class="item muted">{formatNumber(totalWords)} words total</span>
     {:else}
-      <span class="item muted">No project open</span>
+      <button class="item link" onclick={() => view.set("library")}>
+        ← Back to Library
+      </button>
     {/if}
   </div>
   <div class="right">
     {#if $activeChapter}
-      <span class="item">{$activeChapter.title} ({$activeChapter.wordCount} words)</span>
+      <span class="item">{$activeChapter.title}</span>
+      <span class="sep">·</span>
+      <span class="item">{formatNumber($activeChapter.wordCount)} words</span>
+      <span class="sep">·</span>
+    {/if}
+    {#if dailyGoal > 0}
+      <span class="item" class:met={goalMet}>
+        {#if goalMet}✓{:else}◐{/if}
+        {formatNumber(todayWords)} / {formatNumber(dailyGoal)} today
+      </span>
+      <span class="sep">·</span>
+    {/if}
+    {#if streak > 0}
+      <span class="item streak">🔥 {streak}-day streak</span>
       <span class="sep">·</span>
     {/if}
     {#if $isGenerating}
@@ -37,9 +70,9 @@
 
 <style>
   .statusbar {
-    height: 24px;
+    height: 22px;
     background: var(--bg-2);
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--border-soft);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -59,14 +92,28 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 400px;
+    max-width: 320px;
+    font-variant-numeric: tabular-nums;
   }
   .item.muted {
     color: var(--fg-2);
   }
-  .item.mono {
-    font-family: var(--mono);
-    color: var(--fg-2);
+  .item.link {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 0;
+    font-size: 11px;
+  }
+  .item.link:hover {
+    text-decoration: underline;
+  }
+  .item.met {
+    color: var(--success);
+  }
+  .item.streak {
+    color: var(--warn);
   }
   .item.accent {
     color: var(--accent);
@@ -82,14 +129,14 @@
   }
   .toast {
     position: fixed;
-    bottom: 36px;
+    bottom: 30px;
     right: 16px;
     padding: 10px 16px;
     border-radius: 6px;
     font-size: 12px;
     z-index: 1000;
     max-width: 360px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     animation: slidein 0.18s ease-out;
   }
   .toast.info {
@@ -98,12 +145,12 @@
     color: var(--fg-0);
   }
   .toast.success {
-    background: rgba(110, 231, 183, 0.15);
+    background: color-mix(in srgb, var(--success) 18%, var(--bg-3));
     border: 1px solid var(--success);
     color: var(--success);
   }
   .toast.error {
-    background: rgba(248, 113, 113, 0.15);
+    background: color-mix(in srgb, var(--error) 18%, var(--bg-3));
     border: 1px solid var(--error);
     color: var(--error);
   }

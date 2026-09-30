@@ -8,11 +8,15 @@
     openProjectFolder,
     project,
     refreshChapters,
+    refreshWritingStats,
     workspaceBooks,
     workspacePath,
+    view,
+    writingStats,
   } from "$lib/stores";
   import { api } from "$lib/api";
-  import { humanDate } from "$lib/util";
+  import { humanDate, formatNumber, formatRelative } from "$lib/util";
+  import ProgressRing from "./ProgressRing.svelte";
 
   let newBookTitle = $state("");
   let newBookAuthor = $state("");
@@ -33,8 +37,8 @@
       newBookTitle = "";
       newBookAuthor = "";
       showNewBook = false;
-    } catch (e) {
-      // error handled by createBook notify
+    } catch {
+      // handled by createBook notify
     } finally {
       isCreatingBook = false;
     }
@@ -53,6 +57,7 @@
 
   async function selectChapter(filename: string) {
     activeChapterFilename.set(filename);
+    view.set("writer");
   }
 
   async function addChapter() {
@@ -83,147 +88,201 @@
         activeChapterFilename.set(null);
       }
       await refreshChapters();
+      await refreshWritingStats();
       notify("success", `Deleted ${filename}`);
     } catch (e) {
       notify("error", `Delete failed: ${e}`);
     }
   }
+
+  let totalWords = $derived(
+    $project ? $project.chapters.reduce((s, c) => s + c.wordCount, 0) : 0,
+  );
+
+  let todayWords = $derived($writingStats?.todayWords ?? 0);
+  let dailyGoal = $derived($writingStats?.dailyGoal ?? 500);
+  let goalMet = $derived($writingStats?.todayGoalMet ?? false);
+  let streak = $derived($writingStats?.currentStreak ?? 0);
+
+  let navItems = $derived([
+    { id: "writer" as const, label: "Write", icon: "✎" },
+    { id: "bible" as const, label: "Story Bible", icon: "📖" },
+    { id: "stats" as const, label: "Progress", icon: "📊" },
+  ]);
 </script>
 
-<aside class="sidebar">
-  <div class="sidebar-section">
-    <div class="section-header">
-      <span>Book</span>
-      <div class="actions">
-        <button class="action-btn" onclick={() => (showNewBook = !showNewBook)} title="Create a new book in ~/.bookforge">
-          + New
-        </button>
-        {#if $workspaceBooks.length > 0}
-          <button class="action-btn" onclick={() => (showLibrary = !showLibrary)} title="Browse library in ~/.bookforge">
-            Books ({$workspaceBooks.length})
-          </button>
+<aside class="sidebar chrome-fade">
+  <!-- Top: brand + library nav -->
+  <div class="sidebar-section brand-row">
+    <button class="brand" onclick={() => view.set("library")}>
+      <span class="brand-icon">✎</span>
+      <span class="brand-text">BookForge</span>
+    </button>
+  </div>
+
+  {#if $project}
+    <!-- Book info -->
+    <div class="sidebar-section book-info">
+      <h2 class="book-title">{$project.meta.title}</h2>
+      <div class="book-meta">by {$project.meta.author}</div>
+      <div class="book-stats">
+        <span>{formatNumber(totalWords)} words</span>
+        {#if streak > 0}
+          <span class="streak-badge">
+            🔥 <span class="flame">{streak}</span>
+          </span>
         {/if}
-        <button class="action-btn" onclick={pickAndOpen} title="Open an external folder">
-          Open…
-        </button>
+      </div>
+      <!-- Daily goal ring -->
+      <div class="goal-row">
+        <ProgressRing value={todayWords} max={dailyGoal} size={40} stroke={3} showLabel={false} />
+        <div class="goal-text">
+          <div class="goal-numbers">
+            <span class="today-words" class:met={goalMet}>{formatNumber(todayWords)}</span>
+            <span class="goal-target"> / {formatNumber(dailyGoal)}</span>
+          </div>
+          <div class="goal-label">
+            {#if goalMet}
+              ✓ Goal met today
+            {:else}
+              {formatNumber(Math.max(0, dailyGoal - todayWords))} to go today
+            {/if}
+          </div>
+        </div>
       </div>
     </div>
 
-    {#if showNewBook}
-      <div class="new-book-form">
-        <div class="form-heading">Create Book</div>
-        <input
-          bind:value={newBookTitle}
-          placeholder="Book Name (e.g. Chronicles of Earth)"
-          onkeydown={(e) => e.key === "Enter" && handleCreateBook()}
-        />
-        <input
-          bind:value={newBookAuthor}
-          placeholder="Author name (optional)"
-          onkeydown={(e) => e.key === "Enter" && handleCreateBook()}
-        />
-        <div class="workspace-hint">
-          📁 Automatically created in <code>{$workspacePath || ".bookforge"}</code>
-        </div>
-        <div class="row">
-          <button class="primary" onclick={handleCreateBook} disabled={!newBookTitle.trim() || isCreatingBook}>
-            {isCreatingBook ? "Creating…" : "Create"}
-          </button>
-          <button onclick={() => (showNewBook = false)}>Cancel</button>
-        </div>
-      </div>
-    {/if}
+    <!-- Nav -->
+    <div class="sidebar-section nav-section">
+      {#each navItems as item}
+        <button
+          class="nav-item"
+          class:active={$view === item.id}
+          onclick={() => view.set(item.id)}
+        >
+          <span class="nav-icon">{item.icon}</span>
+          <span>{item.label}</span>
+        </button>
+      {/each}
+    </div>
 
-    {#if showLibrary}
-      <div class="library-browser">
-        <div class="library-header">
-          <span>Library ({$workspaceBooks.length})</span>
-          <button onclick={() => (showLibrary = false)}>✕</button>
+    <!-- Chapters -->
+    <div class="sidebar-section flex-grow">
+      <div class="section-header">
+        <span>Chapters</span>
+        <button class="action-btn" onclick={() => (showNewChapter = !showNewChapter)}>+ Add</button>
+      </div>
+
+      {#if showNewChapter}
+        <div class="new-chapter">
+          <input bind:value={newChapterName} placeholder="filename.md" />
+          <input bind:value={newChapterTitle} placeholder="Chapter title" />
+          <div class="row">
+            <button class="primary" onclick={addChapter}>Create</button>
+            <button onclick={() => (showNewChapter = false)}>Cancel</button>
+          </div>
         </div>
-        <ul class="library-list">
-          {#each $workspaceBooks as b (b.root)}
+      {/if}
+
+      {#if $project && $project.chapters.length > 0}
+        <ul class="chapter-list">
+          {#each $project.chapters as ch (ch.filename)}
             <li>
               <button
-                class="library-item"
-                class:active={$project?.root === b.root}
-                onclick={() => {
-                  openProjectFolder(b.root);
-                  showLibrary = false;
-                }}
+                class="chapter-item"
+                class:active={$activeChapterFilename === ch.filename}
+                onclick={() => selectChapter(ch.filename)}
               >
-                <div class="lib-title">{b.meta.title}</div>
-                <div class="lib-meta">{b.chapters.length} ch · {humanDate(b.meta.updatedAt)}</div>
+                <span class="chapter-order">{String(ch.order).padStart(2, "0")}</span>
+                <span class="chapter-title" title={ch.filename}>{ch.title}</span>
+                <span class="chapter-words">{ch.wordCount}w</span>
               </button>
+              <button class="chapter-delete" onclick={() => deleteChapter(ch.filename)} title="Delete">×</button>
             </li>
           {/each}
         </ul>
-      </div>
-    {/if}
-
-    {#if $project}
-      <div class="project-info">
-        <div class="project-title" title={$project.meta.title}>{$project.meta.title}</div>
-        <div class="project-meta">by {$project.meta.author}</div>
-        <div class="project-meta">{$project.chapters.length} chapters · v{$project.meta.version}</div>
-        <div class="project-meta" title={$project.root}>{$project.root}</div>
-        <div class="project-meta">Updated {humanDate($project.meta.updatedAt)}</div>
-      </div>
-    {:else if !showNewBook}
+      {:else}
+        <div class="empty">
+          <p>No chapters yet.</p>
+        </div>
+      {/if}
+    </div>
+  {:else}
+    <!-- No project open -->
+    <div class="sidebar-section flex-grow">
       <div class="empty">
         <p>No book open.</p>
         <button class="primary empty-create-btn" onclick={() => (showNewBook = true)}>+ Create New Book</button>
-        <div class="empty-hint">Books are stored in <code>{$workspacePath || "C:\\Users\\user\\.bookforge"}</code></div>
+        <div class="empty-hint">Books are stored in <code>{$workspacePath || "~/.bookforge"}</code></div>
       </div>
-    {/if}
+    </div>
+  {/if}
+
+  <!-- Library / new book actions -->
+  <div class="sidebar-section actions-section">
+    <div class="row">
+      <button class="action-btn full" onclick={() => (showNewBook = !showNewBook)}>+ New Book</button>
+      <button class="action-btn full" onclick={() => (showLibrary = !showLibrary)}>Books ({$workspaceBooks.length})</button>
+      <button class="action-btn full" onclick={pickAndOpen}>Open…</button>
+    </div>
   </div>
 
-  <div class="sidebar-section flex-grow">
-    <div class="section-header">
-      <span>Chapters</span>
-      {#if $project}
-        <button onclick={() => (showNewChapter = !showNewChapter)}>+ Add</button>
-      {/if}
-    </div>
-    {#if showNewChapter}
-      <div class="new-chapter">
-        <input bind:value={newChapterName} placeholder="filename.md" />
-        <input bind:value={newChapterTitle} placeholder="Chapter title" />
-        <div class="row">
-          <button class="primary" onclick={addChapter}>Create</button>
-          <button onclick={() => (showNewChapter = false)}>Cancel</button>
-        </div>
+  {#if showNewBook}
+    <div class="new-book-form">
+      <div class="form-heading">Create Book</div>
+      <input
+        bind:value={newBookTitle}
+        placeholder="Book Name"
+        onkeydown={(e) => e.key === "Enter" && handleCreateBook()}
+      />
+      <input
+        bind:value={newBookAuthor}
+        placeholder="Author (optional)"
+        onkeydown={(e) => e.key === "Enter" && handleCreateBook()}
+      />
+      <div class="workspace-hint">
+        Created in <code>{$workspacePath || "~/.bookforge"}</code>
       </div>
-    {/if}
+      <div class="row">
+        <button class="primary" onclick={handleCreateBook} disabled={!newBookTitle.trim() || isCreatingBook}>
+          {isCreatingBook ? "Creating…" : "Create"}
+        </button>
+        <button onclick={() => (showNewBook = false)}>Cancel</button>
+      </div>
+    </div>
+  {/if}
 
-    {#if $project && $project.chapters.length > 0}
-      <ul class="chapter-list">
-        {#each $project.chapters as ch (ch.filename)}
+  {#if showLibrary}
+    <div class="library-browser">
+      <div class="library-header">
+        <span>Library ({$workspaceBooks.length})</span>
+        <button onclick={() => (showLibrary = false)}>✕</button>
+      </div>
+      <ul class="library-list">
+        {#each $workspaceBooks as b (b.root)}
           <li>
             <button
-              class="chapter-item"
-              class:active={$activeChapterFilename === ch.filename}
-              onclick={() => selectChapter(ch.filename)}
+              class="library-item"
+              class:active={$project?.root === b.root}
+              onclick={() => {
+                openProjectFolder(b.root);
+                showLibrary = false;
+              }}
             >
-              <span class="chapter-order">{String(ch.order).padStart(2, "0")}</span>
-              <span class="chapter-title" title={ch.filename}>{ch.title}</span>
-              <span class="chapter-words">{ch.wordCount}w</span>
+              <div class="lib-title">{b.meta.title}</div>
+              <div class="lib-meta">{b.chapters.length} ch · {formatRelative(b.meta.updatedAt)}</div>
             </button>
-            <button class="chapter-delete" onclick={() => deleteChapter(ch.filename)} title="Delete">×</button>
           </li>
         {/each}
       </ul>
-    {:else}
-      <div class="empty">
-        <p>No chapters yet.</p>
-      </div>
-    {/if}
-  </div>
+    </div>
+  {/if}
 </aside>
 
 <style>
   .sidebar {
-    width: 280px;
-    min-width: 280px;
+    width: 240px;
+    min-width: 240px;
     background: var(--bg-1);
     border-right: 1px solid var(--border);
     display: flex;
@@ -231,75 +290,194 @@
     overflow: hidden;
   }
   .sidebar-section {
-    padding: 12px;
-    border-bottom: 1px solid var(--border);
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-soft);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
   }
   .flex-grow {
     flex: 1;
     overflow-y: auto;
     border-bottom: none;
   }
+  .brand-row {
+    padding: 12px 12px 10px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    color: var(--fg-0);
+    cursor: pointer;
+    padding: 0;
+    font-size: 14px;
+  }
+  .brand:hover {
+    background: transparent;
+    color: var(--fg-0);
+  }
+  .brand-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--paper);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--serif);
+    font-size: 15px;
+  }
+  .brand-text {
+    font-family: var(--serif);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .book-info {
+    padding: 12px;
+  }
+  .book-title {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--fg-0);
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .book-meta {
+    font-size: 11px;
+    color: var(--fg-2);
+    margin-top: 2px;
+  }
+  .book-stats {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--fg-1);
+    font-variant-numeric: tabular-nums;
+  }
+  .streak-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--bg-3);
+    color: var(--warn);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .goal-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 8px;
+    background: var(--bg-2);
+    border-radius: 8px;
+  }
+  .goal-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .goal-numbers {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    font-size: 12px;
+  }
+  .today-words {
+    font-family: var(--serif);
+    font-weight: 500;
+    color: var(--fg-0);
+    font-variant-numeric: tabular-nums;
+  }
+  .today-words.met {
+    color: var(--success);
+  }
+  .goal-target {
+    color: var(--fg-2);
+    font-size: 11px;
+  }
+  .goal-label {
+    font-size: 10px;
+    color: var(--fg-2);
+    margin-top: 2px;
+  }
+  .nav-section {
+    padding: 6px 8px;
+    gap: 1px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--fg-1);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .nav-item:hover {
+    background: var(--bg-3);
+    color: var(--fg-0);
+  }
+  .nav-item.active {
+    background: var(--bg-3);
+    color: var(--accent);
+  }
+  .nav-icon {
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+  }
   .section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--fg-2);
     font-weight: 600;
+    margin-bottom: 6px;
   }
-  .section-header .actions {
+  .action-btn {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  .full {
+    width: 100%;
+  }
+  .row {
     display: flex;
     gap: 4px;
-  }
-  .section-header button {
-    padding: 2px 8px;
-    font-size: 11px;
-  }
-  .project-info {
-    font-size: 12px;
-    line-height: 1.5;
-  }
-  .project-title {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .project-meta {
-    color: var(--fg-2);
-    font-size: 11px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .empty {
-    color: var(--fg-2);
-    font-size: 12px;
-    text-align: center;
-    padding: 16px 8px;
-    line-height: 1.5;
-  }
-  .empty code {
-    background: var(--bg-2);
-    padding: 1px 4px;
-    border-radius: 3px;
-  }
-  .new-book-form {
-    display: flex;
     flex-direction: column;
-    gap: 6px;
+  }
+  .actions-section {
+    gap: 4px;
+  }
+  .new-book-form,
+  .library-browser,
+  .new-chapter {
+    margin: 6px 12px;
     padding: 10px;
     background: var(--bg-2);
     border: 1px solid var(--border);
     border-radius: 6px;
-    margin-bottom: 6px;
   }
   .new-book-form .form-heading {
     font-size: 11px;
@@ -307,15 +485,20 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--accent);
+    margin-bottom: 6px;
   }
-  .new-book-form input {
+  .new-book-form input,
+  .new-chapter input {
+    width: 100%;
     font-size: 12px;
+    margin-bottom: 6px;
   }
-  .new-book-form .row {
-    display: flex;
-    gap: 6px;
+  .new-book-form .row,
+  .new-chapter .row {
+    flex-direction: row;
   }
-  .new-book-form button {
+  .new-book-form button,
+  .new-chapter button {
     flex: 1;
     padding: 4px 8px;
     font-size: 11px;
@@ -324,6 +507,7 @@
     font-size: 10px;
     color: var(--fg-2);
     line-height: 1.4;
+    margin-bottom: 6px;
   }
   .workspace-hint code {
     font-family: var(--mono);
@@ -333,16 +517,11 @@
     word-break: break-all;
   }
   .library-browser {
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px;
-    margin-bottom: 6px;
+    max-height: 200px;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: 180px;
-    overflow-y: auto;
   }
   .library-header {
     display: flex;
@@ -387,7 +566,6 @@
   }
   .library-item.active {
     border-color: var(--accent);
-    background: var(--bg-3);
   }
   .lib-title {
     font-size: 12px;
@@ -400,7 +578,18 @@
   .lib-meta {
     font-size: 10px;
     color: var(--fg-2);
-    font-family: var(--mono);
+  }
+  .empty {
+    color: var(--fg-2);
+    font-size: 12px;
+    text-align: center;
+    padding: 24px 8px;
+    line-height: 1.5;
+  }
+  .empty code {
+    background: var(--bg-2);
+    padding: 1px 4px;
+    border-radius: 3px;
   }
   .empty-create-btn {
     margin-top: 8px;
@@ -416,26 +605,8 @@
     font-family: var(--mono);
     word-break: break-all;
   }
-  .new-chapter {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px;
-    background: var(--bg-2);
-    border-radius: 6px;
-    margin-bottom: 4px;
-  }
   .new-chapter input {
     font-size: 12px;
-  }
-  .new-chapter .row {
-    display: flex;
-    gap: 6px;
-  }
-  .new-chapter button {
-    flex: 1;
-    padding: 4px 8px;
-    font-size: 11px;
   }
   .chapter-list {
     list-style: none;
@@ -448,7 +619,6 @@
   .chapter-list li {
     display: flex;
     align-items: stretch;
-    gap: 0;
   }
   .chapter-item {
     flex: 1;
@@ -482,6 +652,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-family: var(--serif);
   }
   .chapter-words {
     color: var(--fg-2);

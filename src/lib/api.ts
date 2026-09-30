@@ -8,6 +8,12 @@ import type {
   ProjectMeta,
   ProjectTree,
   SpawnOptions,
+  StoryBible,
+  StoryNote,
+  Character,
+  Location,
+  WritingStats,
+  UIPrefs,
 } from "./types";
 
 export const api = {
@@ -72,4 +78,28 @@ export const api = {
   termResize: (sessionId: string, cols: number, rows: number) =>
     invoke<void>("term_resize", { sessionId, cols, rows }),
   termKill: (sessionId: string) => invoke<void>("term_kill", { sessionId }),
+
+  // ----- New in v0.2: Story Bible -----
+  bibleList: (root: string) => invoke<StoryBible>("bible_list", { root }),
+  bibleUpsertCharacter: (root: string, character: Character) =>
+    invoke<Character>("bible_upsert_character", { root, character }),
+  bibleDeleteCharacter: (root: string, id: string) =>
+    invoke<void>("bible_delete_character", { root, id }),
+  bibleUpsertLocation: (root: string, location: Location) =>
+    invoke<Location>("bible_upsert_location", { root, location }),
+  bibleDeleteLocation: (root: string, id: string) =>
+    invoke<void>("bible_delete_location", { root, id }),
+  bibleUpsertNote: (root: string, note: StoryNote) =>
+    invoke<StoryNote>("bible_upsert_note", { root, note }),
+  bibleDeleteNote: (root: string, id: string) =>
+    invoke<void>("bible_delete_note", { root, id }),
+
+  // ----- New in v0.2: Writing stats -----
+  writingStats: (root: string) => invoke<WritingStats>("writing_stats", { root }),
+  recordSession: (root: string, wordsWritten: number, minutesSpent: number) =>
+    invoke<void>("record_session", { root, wordsWritten, minutesSpent }),
+
+  // ----- New in v0.2: UI preferences (persisted via tauri-plugin-store) -----
+  prefsLoad: () => invoke<UIPrefs>("prefs_load"),
+  prefsSave: (prefs: UIPrefs) => invoke<void>("prefs_save", { prefs }),
 };

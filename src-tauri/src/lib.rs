@@ -6,6 +6,7 @@ pub mod ai;
 pub mod commands;
 pub mod export;
 pub mod model;
+pub mod prefs;
 pub mod project;
 pub mod terminal;
 
@@ -67,6 +68,20 @@ pub fn run() {
             commands::chapter_write,
             commands::chapter_delete,
             commands::chapter_rename,
+            // story bible (new in v0.2)
+            commands::bible_list,
+            commands::bible_upsert_character,
+            commands::bible_delete_character,
+            commands::bible_upsert_location,
+            commands::bible_delete_location,
+            commands::bible_upsert_note,
+            commands::bible_delete_note,
+            // writing stats (new in v0.2)
+            commands::writing_stats,
+            commands::record_session,
+            // ui prefs (new in v0.2)
+            commands::prefs_load,
+            commands::prefs_save,
             // export
             commands::export_html,
             commands::export_pdf,

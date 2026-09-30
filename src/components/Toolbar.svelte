@@ -74,7 +74,7 @@
   }
 </script>
 
-<div class="toolbar">
+<div class="toolbar chrome-fade">
   <div class="group">
     <button onclick={newChapterQuick} disabled={!$project}>+ Chapter</button>
   </div>

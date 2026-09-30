@@ -1,6 +1,6 @@
 {
   "name": "bookforge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tauri-based book writing IDE with embedded AI (llama.cpp) and a terminal/REPL.",
   "type": "module",
   "scripts": {

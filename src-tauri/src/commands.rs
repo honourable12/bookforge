@@ -8,8 +8,11 @@ use tauri::{AppHandle, State, Window};
 use crate::ai::{self, ChatMessage, GenParams, StreamChunk};
 use crate::export::{self, ExportResult};
 use crate::model;
-use crate::project::{self, Chapter, ProjectMeta, ProjectTree};
+use crate::project::{
+    self, Character, Chapter, Location, ProjectMeta, ProjectTree, StoryBible, StoryNote, WritingStats,
+};
 use crate::terminal::{self, SpawnOptions};
+use crate::prefs;
 
 // ---------------------------------------------------------------------------
 // Model / AI
@@ -168,6 +171,77 @@ pub fn chapter_delete(root: String, filename: String) -> Result<(), String> {
 #[tauri::command]
 pub fn chapter_rename(root: String, old: String, new: String) -> Result<(), String> {
     project::rename_chapter(&PathBuf::from(root), &old, &new)
+}
+
+// ---------------------------------------------------------------------------
+// Story Bible — characters, locations, notes (new in v0.2)
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn bible_list(root: String) -> Result<StoryBible, String> {
+    project::list_bible(&PathBuf::from(root))
+}
+
+#[tauri::command]
+pub fn bible_upsert_character(root: String, character: Character) -> Result<Character, String> {
+    project::upsert_character(&PathBuf::from(root), character)
+}
+
+#[tauri::command]
+pub fn bible_delete_character(root: String, id: String) -> Result<(), String> {
+    project::delete_character(&PathBuf::from(root), &id)
+}
+
+#[tauri::command]
+pub fn bible_upsert_location(root: String, location: Location) -> Result<Location, String> {
+    project::upsert_location(&PathBuf::from(root), location)
+}
+
+#[tauri::command]
+pub fn bible_delete_location(root: String, id: String) -> Result<(), String> {
+    project::delete_location(&PathBuf::from(root), &id)
+}
+
+#[tauri::command]
+pub fn bible_upsert_note(root: String, note: StoryNote) -> Result<StoryNote, String> {
+    project::upsert_note(&PathBuf::from(root), note)
+}
+
+#[tauri::command]
+pub fn bible_delete_note(root: String, id: String) -> Result<(), String> {
+    project::delete_note(&PathBuf::from(root), &id)
+}
+
+// ---------------------------------------------------------------------------
+// Writing stats (new in v0.2)
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn writing_stats(root: String) -> Result<WritingStats, String> {
+    project::writing_stats_summary(&PathBuf::from(root))
+}
+
+#[tauri::command]
+pub fn record_session(
+    root: String,
+    words_written: u64,
+    minutes_spent: u64,
+) -> Result<(), String> {
+    project::record_session(&PathBuf::from(root), words_written, minutes_spent)
+}
+
+// ---------------------------------------------------------------------------
+// UI preferences (new in v0.2 — persisted via tauri-plugin-store)
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn prefs_load(app: AppHandle) -> Result<prefs::UIPrefs, String> {
+    prefs::load(&app)
+}
+
+#[tauri::command]
+pub fn prefs_save(app: AppHandle, prefs: prefs::UIPrefs) -> Result<(), String> {
+    prefs::save(&app, &prefs)
 }
 
 // ---------------------------------------------------------------------------

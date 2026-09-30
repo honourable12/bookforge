@@ -1,17 +1,92 @@
-:root {
-  --bg-0: #0f1115;
-  --bg-1: #161a22;
-  --bg-2: #1d222d;
-  --bg-3: #262c39;
-  --border: #2f3645;
-  --fg-0: #e6e9ef;
-  --fg-1: #aab2c0;
-  --fg-2: #6b7280;
-  --accent: #7c9cff;
+:root,
+[data-theme="sepia"] {
+  /* BookForge semantic tokens — writers think in paper/ink, not bg/fg */
+  --bg-0: #e8dcbf;      /* deepest: outside the page */
+  --bg-1: #ede2c8;      /* sidebar */
+  --bg-2: #f0e6d2;      /* toolbar / panels */
+  --bg-3: #f7eed7;      /* cards / inputs */
+  --border: #d4c4a0;
+  --border-soft: #e8dcbf;
+  --fg-0: #3d2f1f;      /* ink */
+  --fg-1: #6b5a44;      /* muted ink */
+  --fg-2: #a89880;      /* faint */
+  --accent: #a86b2c;    /* amber */
+  --accent-2: #b48cff;  /* secondary accent (kept for compat) */
+  --accent-soft: #d4a574;
+  --success: #5b8c5a;
+  --warn: #c99846;
+  --error: #b94a3c;
+  --paper: #faf4e6;     /* writing surface */
+  --shadow-color: 30 25 15;
+  --mono: "JetBrains Mono", "Cascadia Code", "Consolas", "SF Mono", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+[data-theme="light"] {
+  --bg-0: #f0ebe0;
+  --bg-1: #f5f1e6;
+  --bg-2: #faf8f3;
+  --bg-3: #ffffff;
+  --border: #e5dfd0;
+  --border-soft: #f0ebe0;
+  --fg-0: #1a1610;
+  --fg-1: #5c5448;
+  --fg-2: #a8a094;
+  --accent: #7c5c3e;
   --accent-2: #b48cff;
-  --success: #6ee7b7;
-  --warn: #fbbf24;
-  --error: #f87171;
+  --accent-soft: #c4a888;
+  --success: #4a8a5a;
+  --warn: #d4a043;
+  --error: #c44545;
+  --paper: #ffffff;
+  --shadow-color: 60 50 40;
+  --mono: "JetBrains Mono", "Cascadia Code", "Consolas", "SF Mono", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+[data-theme="dark"] {
+  --bg-0: #14110d;
+  --bg-1: #1a1612;
+  --bg-2: #23201a;
+  --bg-3: #2a251e;
+  --border: #3a3128;
+  --border-soft: #2a251e;
+  --fg-0: #e8dcc4;
+  --fg-1: #a89880;
+  --fg-2: #6b5a44;
+  --accent: #d4a574;
+  --accent-2: #b48cff;
+  --accent-soft: #a86b2c;
+  --success: #8cb888;
+  --warn: #d4a574;
+  --error: #d96955;
+  --paper: #23201a;
+  --shadow-color: 0 0 0;
+  --mono: "JetBrains Mono", "Cascadia Code", "Consolas", "SF Mono", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+[data-theme="night"] {
+  --bg-0: #050506;
+  --bg-1: #0a0a0c;
+  --bg-2: #141416;
+  --bg-3: #1a1a1e;
+  --border: #2a2a2e;
+  --border-soft: #1a1a1e;
+  --fg-0: #c8c4b8;
+  --fg-1: #807c70;
+  --fg-2: #504c44;
+  --accent: #8c7a5c;
+  --accent-2: #b48cff;
+  --accent-soft: #4a3826;
+  --success: #6a9a6a;
+  --warn: #c4a043;
+  --error: #c65555;
+  --paper: #141416;
+  --shadow-color: 0 0 0;
   --mono: "JetBrains Mono", "Cascadia Code", "Consolas", "SF Mono", Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
@@ -33,6 +108,9 @@ body {
   overflow: hidden;
   -webkit-user-select: none;
   user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 #app {
@@ -50,37 +128,44 @@ button {
   border-radius: 6px;
   padding: 6px 12px;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
 button:hover {
   background: var(--border);
+  border-color: var(--accent-soft);
+}
+
+button:active {
+  transform: translateY(0.5px);
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 button.primary {
   background: var(--accent);
-  color: #0f1115;
+  color: var(--paper);
   border-color: var(--accent);
 }
 
 button.primary:hover {
-  background: #94aeff;
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
 }
 
 input,
 textarea {
   font-family: var(--sans);
-  background: var(--bg-2);
+  background: var(--bg-3);
   color: var(--fg-0);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 10px;
   outline: none;
+  transition: border-color 0.15s ease;
 }
 
 input:focus,
@@ -88,19 +173,20 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* Thin scrollbars */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-3);
-  border-radius: 5px;
+  background: var(--border);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--border);
+  background: var(--fg-2);
 }
 
 /* xterm.js overrides for theme consistency */
@@ -110,4 +196,88 @@ textarea:focus {
 }
 .xterm-viewport {
   background-color: transparent !important;
+}
+
+/* ============================================
+   WRITING-SPECIFIC STYLES
+   ============================================ */
+
+/* Smooth fade-in for view transitions */
+.fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Subtle paper texture for the writing surface */
+.paper-texture {
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(168, 107, 44, 0.02) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(168, 107, 44, 0.02) 0%, transparent 50%);
+}
+
+/* Focus mode — fades all chrome */
+.focus-mode .chrome-fade {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+.focus-mode:hover .chrome-fade {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Selection */
+::selection {
+  background: var(--accent-soft);
+  color: var(--paper);
+}
+
+/* Progress ring transition */
+.progress-ring-circle {
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Streak flame animation */
+@keyframes flame-flicker {
+  0%, 100% { transform: scale(1) rotate(-1deg); opacity: 1; }
+  50% { transform: scale(1.08) rotate(1deg); opacity: 0.92; }
+}
+.flame {
+  animation: flame-flicker 2.2s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+/* Milestone pop */
+@keyframes milestone-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.milestone-pop {
+  animation: milestone-pop 0.6s ease-out;
+}
+
+/* Hover lift */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -12px rgba(var(--shadow-color) / 0.3);
+}
+
+/* Streak calendar heatmap colors */
+.heat-0 { background: var(--bg-2); }
+.heat-1 { background: color-mix(in srgb, var(--accent-soft) 30%, var(--bg-2)); }
+.heat-2 { background: color-mix(in srgb, var(--accent-soft) 55%, var(--bg-2)); }
+.heat-3 { background: color-mix(in srgb, var(--accent-soft) 80%, var(--bg-2)); }
+.heat-4 { background: var(--accent); }
+
+/* Empty state gradient */
+.empty-state-gradient {
+  background: radial-gradient(circle at center, var(--accent-soft) 0%, transparent 70%);
+  opacity: 0.18;
 }

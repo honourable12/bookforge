@@ -71,6 +71,8 @@ const META_FILE: &str = "bookforge.json";
 const CHAPTERS_DIR: &str = "chapters";
 const ASSETS_DIR: &str = "assets";
 const EXPORTS_DIR: &str = "exports";
+const BIBLE_DIR: &str = "bible";
+const STATS_FILE: &str = "stats.json";
 
 pub fn meta_path(root: &Path) -> PathBuf {
     root.join(META_FILE)
@@ -88,6 +90,14 @@ pub fn exports_dir(root: &Path) -> PathBuf {
     root.join(EXPORTS_DIR)
 }
 
+pub fn bible_dir(root: &Path) -> PathBuf {
+    root.join(BIBLE_DIR)
+}
+
+pub fn stats_path(root: &Path) -> PathBuf {
+    root.join(STATS_FILE)
+}
+
 /// Create a new project at `root`. Fails if the directory already contains a
 /// `bookforge.json`.
 pub fn create_project(root: &Path, meta: ProjectMeta) -> Result<ProjectTree, String> {
@@ -102,6 +112,7 @@ pub fn create_project(root: &Path, meta: ProjectMeta) -> Result<ProjectTree, Str
         .map_err(|e| format!("mkdir chapters: {}", e))?;
     fs::create_dir_all(assets_dir(root)).map_err(|e| format!("mkdir assets: {}", e))?;
     fs::create_dir_all(exports_dir(root)).map_err(|e| format!("mkdir exports: {}", e))?;
+    fs::create_dir_all(bible_dir(root)).map_err(|e| format!("mkdir bible: {}", e))?;
 
     write_meta(root, &meta)?;
     Ok(ProjectTree {
@@ -253,12 +264,29 @@ pub fn read_chapter(root: &Path, filename: &str) -> Result<String, String> {
 
 pub fn write_chapter(root: &Path, filename: &str, content: &str) -> Result<u64, String> {
     let path = chapters_dir(root).join(filename);
+    // Compute the delta in word count vs. the previous version so we can
+    // record progress for streak tracking.
+    let prev_words = fs::read_to_string(&path)
+        .map(|s| s.split_whitespace().count() as u64)
+        .unwrap_or(0);
+    let new_words = content.split_whitespace().count() as u64;
+    let delta = new_words.saturating_sub(prev_words);
+
     fs::write(&path, content).map_err(|e| format!("write {}: {}", path.display(), e))?;
-    let words = content.split_whitespace().count() as u64;
+
     if let Ok(tree) = open_project(root) {
         let _ = write_meta(root, &tree.meta);
     }
-    Ok(words)
+
+    // Record the writing delta for streak tracking. The minutes_spent is
+    // approximate — the frontend will send a more accurate value via
+    // record_session if it tracks the session timer, but we still bump
+    // today's word count immediately so the daily goal updates live.
+    if delta > 0 {
+        let _ = record_session(root, delta, 0);
+    }
+
+    Ok(new_words)
 }
 
 pub fn delete_chapter(root: &Path, filename: &str) -> Result<(), String> {
@@ -400,6 +428,336 @@ pub fn list_workspace_books() -> Result<Vec<ProjectTree>, String> {
     // Sort recently updated first
     books.sort_by(|a, b| b.meta.updated_at.cmp(&a.meta.updated_at));
     Ok(books)
+}
+
+// ============================================
+// Story Bible — Characters, Locations, Notes
+// ============================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Character {
+    pub id: String,
+    pub name: String,
+    pub role: String,
+    pub description: String,
+    pub traits: String,
+    pub backstory: String,
+    pub appearance: String,
+    pub color: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Location {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub mood: String,
+    pub color: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryNote {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub note_type: String,
+    pub title: String,
+    pub content: String,
+    pub color: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryBible {
+    pub characters: Vec<Character>,
+    pub locations: Vec<Location>,
+    pub notes: Vec<StoryNote>,
+}
+
+fn bible_characters_path(root: &Path) -> PathBuf {
+    bible_dir(root).join("characters.json")
+}
+fn bible_locations_path(root: &Path) -> PathBuf {
+    bible_dir(root).join("locations.json")
+}
+fn bible_notes_path(root: &Path) -> PathBuf {
+    bible_dir(root).join("notes.json")
+}
+
+fn read_json_or_default<T: serde::de::DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
+    if !path.exists() {
+        return Ok(T::default());
+    }
+    let s = fs::read_to_string(path).map_err(|e| format!("read {}: {}", path.display(), e))?;
+    if s.trim().is_empty() {
+        return Ok(T::default());
+    }
+    serde_json::from_str(&s).map_err(|e| format!("parse {}: {}", path.display(), e))
+}
+
+fn write_json<T: Serialize>(path: &Path, v: &T) -> Result<(), String> {
+    let s = serde_json::to_string_pretty(v).map_err(|e| format!("serialize: {}", e))?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir parent: {}", e))?;
+    }
+    fs::write(path, s).map_err(|e| format!("write {}: {}", path.display(), e))
+}
+
+pub fn list_bible(root: &Path) -> Result<StoryBible, String> {
+    let characters = read_json_or_default::<Vec<Character>>(&bible_characters_path(root))?;
+    let locations = read_json_or_default::<Vec<Location>>(&bible_locations_path(root))?;
+    let notes = read_json_or_default::<Vec<StoryNote>>(&bible_notes_path(root))?;
+    Ok(StoryBible { characters, locations, notes })
+}
+
+pub fn upsert_character(root: &Path, mut ch: Character) -> Result<Character, String> {
+    let mut list = read_json_or_default::<Vec<Character>>(&bible_characters_path(root))?;
+    if ch.id.is_empty() {
+        ch.id = gen_id();
+    }
+    if let Some(existing) = list.iter_mut().find(|c| c.id == ch.id) {
+        *existing = ch.clone();
+    } else {
+        list.push(ch.clone());
+    }
+    write_json(&bible_characters_path(root), &list)?;
+    Ok(ch)
+}
+
+pub fn delete_character(root: &Path, id: &str) -> Result<(), String> {
+    let mut list = read_json_or_default::<Vec<Character>>(&bible_characters_path(root))?;
+    list.retain(|c| c.id != id);
+    write_json(&bible_characters_path(root), &list)
+}
+
+pub fn upsert_location(root: &Path, mut loc: Location) -> Result<Location, String> {
+    let mut list = read_json_or_default::<Vec<Location>>(&bible_locations_path(root))?;
+    if loc.id.is_empty() {
+        loc.id = gen_id();
+    }
+    if let Some(existing) = list.iter_mut().find(|l| l.id == loc.id) {
+        *existing = loc.clone();
+    } else {
+        list.push(loc.clone());
+    }
+    write_json(&bible_locations_path(root), &list)?;
+    Ok(loc)
+}
+
+pub fn delete_location(root: &Path, id: &str) -> Result<(), String> {
+    let mut list = read_json_or_default::<Vec<Location>>(&bible_locations_path(root))?;
+    list.retain(|l| l.id != id);
+    write_json(&bible_locations_path(root), &list)
+}
+
+pub fn upsert_note(root: &Path, mut note: StoryNote) -> Result<StoryNote, String> {
+    let mut list = read_json_or_default::<Vec<StoryNote>>(&bible_notes_path(root))?;
+    if note.id.is_empty() {
+        note.id = gen_id();
+    }
+    if let Some(existing) = list.iter_mut().find(|n| n.id == note.id) {
+        *existing = note.clone();
+    } else {
+        list.push(note.clone());
+    }
+    write_json(&bible_notes_path(root), &list)?;
+    Ok(note)
+}
+
+pub fn delete_note(root: &Path, id: &str) -> Result<(), String> {
+    let mut list = read_json_or_default::<Vec<StoryNote>>(&bible_notes_path(root))?;
+    list.retain(|n| n.id != id);
+    write_json(&bible_notes_path(root), &list)
+}
+
+fn gen_id() -> String {
+    // Short, sortable-ish id (timestamp + random) — no extra deps.
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let rand: u32 = rand_like();
+    format!("bf{:x}{:04x}", ts, rand)
+}
+
+// Tiny in-process RNG (no extra crate needed; not crypto-secure but adequate for ids).
+fn rand_like() -> u32 {
+    use std::cell::Cell;
+    thread_local! {
+        static SEED: Cell<u32> = Cell::new(0x1234_5678);
+    }
+    SEED.with(|s| {
+        let mut x = s.get();
+        // xorshift32
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        s.set(x);
+        x
+    })
+}
+
+// ============================================
+// Writing progress (stats.json + daily tracking)
+// ============================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyProgress {
+    pub date: String,         // YYYY-MM-DD
+    pub words_written: u64,
+    pub goal_met: bool,
+    pub minutes_spent: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WritingStatsFile {
+    pub daily: Vec<DailyProgress>,
+    pub last_written_at: Option<String>,
+    pub current_streak: u32,
+    pub longest_streak: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WritingStats {
+    pub total_words: u64,
+    pub current_streak: u32,
+    pub longest_streak: u32,
+    pub daily_goal: u32,
+    pub today_words: u64,
+    pub today_goal_met: bool,
+    pub goals_met_count: u32,
+    pub daily: Vec<DailyProgress>,
+}
+
+pub fn read_stats(root: &Path) -> Result<WritingStatsFile, String> {
+    read_json_or_default::<WritingStatsFile>(&stats_path(root))
+}
+
+pub fn write_stats(root: &Path, stats: &WritingStatsFile) -> Result<(), String> {
+    write_json(&stats_path(root), stats)
+}
+
+/// Records a writing session: bumps today's word count by `words_written`,
+/// increments minutes spent, recomputes the streak.
+pub fn record_session(root: &Path, words_written: u64, minutes_spent: u64) -> Result<(), String> {
+    let mut stats = read_stats(root)?;
+    let today = today_iso();
+
+    let goal = book_daily_goal(root).unwrap_or(500);
+
+    let entry = stats
+        .daily
+        .iter_mut()
+        .find(|d| d.date == today);
+
+    if let Some(e) = entry {
+        e.words_written += words_written;
+        e.minutes_spent += minutes_spent;
+        if e.words_written >= goal as u64 {
+            e.goal_met = true;
+        }
+    } else {
+        let words = words_written;
+        stats.daily.push(DailyProgress {
+            date: today.clone(),
+            words_written: words,
+            goal_met: words >= goal as u64,
+            minutes_spent,
+        });
+    }
+
+    stats.last_written_at = Some(chrono::Utc::now().to_rfc3339());
+    stats.current_streak = compute_streak(&stats.daily);
+    stats.longest_streak = stats.longest_streak.max(stats.current_streak);
+
+    write_stats(root, &stats)
+}
+
+pub fn writing_stats_summary(root: &Path) -> Result<WritingStats, String> {
+    let stats = read_stats(root)?;
+    let today = today_iso();
+    let today_entry = stats.daily.iter().find(|d| d.date == today);
+    let today_words = today_entry.map(|d| d.words_written).unwrap_or(0);
+    let today_goal_met = today_entry.map(|d| d.goal_met).unwrap_or(false);
+    let goal = book_daily_goal(root).unwrap_or(500);
+
+    let total_words: u64 = book_total_words(root)?;
+
+    // Trim daily to last 90 days for the UI.
+    let mut daily_90: Vec<DailyProgress> = stats
+        .daily
+        .iter()
+        .rev()
+        .take(90)
+        .cloned()
+        .collect();
+    daily_90.reverse();
+
+    Ok(WritingStats {
+        total_words,
+        current_streak: stats.current_streak,
+        longest_streak: stats.longest_streak,
+        daily_goal: goal,
+        today_words,
+        today_goal_met,
+        goals_met_count: stats.daily.iter().filter(|d| d.goal_met).count() as u32,
+        daily: daily_90,
+    })
+}
+
+fn compute_streak(daily: &[DailyProgress]) -> u32 {
+    let mut dates_met: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for d in daily {
+        if d.goal_met {
+            dates_met.insert(d.date.as_str());
+        }
+    }
+    let mut streak = 0u32;
+    let today = today_iso();
+    let today_d = chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").ok();
+    if today_d.is_none() {
+        return 0;
+    }
+    let mut cursor = today_d.unwrap();
+    let mut skipped_today = false;
+    for _ in 0..365 {
+        let iso = cursor.format("%Y-%m-%d").to_string();
+        if dates_met.contains(iso.as_str()) {
+            streak += 1;
+        } else if !skipped_today && iso == today {
+            skipped_today = true;
+            // Allow today to be empty without breaking the streak.
+        } else {
+            break;
+        }
+        cursor = cursor.pred_opt().unwrap_or(cursor);
+    }
+    streak
+}
+
+fn today_iso() -> String {
+    chrono::Utc::now().format("%Y-%m-%d").to_string()
+}
+
+fn book_daily_goal(root: &Path) -> Option<u32> {
+    // The daily goal lives in bookforge.json as meta.dailyGoal (optional).
+    let raw = fs::read_to_string(meta_path(root)).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    v.get("dailyGoal")
+        .and_then(|n| n.as_u64())
+        .map(|n| n as u32)
+        .or(Some(500))
+}
+
+fn book_total_words(root: &Path) -> Result<u64, String> {
+    let chapters = list_chapters(root)?;
+    Ok(chapters.iter().map(|c| c.word_count).sum())
 }
 
 #[cfg(test)]

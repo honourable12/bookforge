@@ -4,12 +4,80 @@ A **Tauri-based book-writing IDE** for Windows with an embedded **local AI assis
 
 Built with:
 - **Rust + Tauri 2** for the native shell and AI inference
-- **Svelte 4 + Vite + TypeScript** for the UI
+- **Svelte 5 + Vite + TypeScript** for the UI
 - **CodeMirror 6** for the prose editor
 - **xterm.js** for the embedded terminal
 - **`llama-cpp-2`** for in-process LLM inference — no Python, no server, no API keys
 
 The default model is `qwen2.5-1.5b-instruct-q4_k_m.gguf` (~1 GB), which fits comfortably in RAM on a laptop and loads in a few seconds. Any GGUF model is supported via the `BOOKFORGE_MODEL` env var.
+
+---
+
+## v0.2 — A writing environment that encourages writing
+
+The original BookForge was modeled on a developer IDE (VS Code). v0.2 reframes the
+UI around the writer's psychology: a warm paper-like aesthetic, daily writing
+goals, distraction-free Focus mode, and a Story Bible for keeping your
+characters and locations close at hand.
+
+### What's new
+
+- **Four writer-friendly themes** — Sepia (warm parchment, default), Light, Dark,
+  and Night (true black for late sessions). Switch via the color-dot dropdown
+  in the top-right. Your choice persists across restarts.
+- **Daily writing goal + streak tracking** — every book has a `dailyGoal` (set
+  during creation, default 500 words). The sidebar shows a progress ring; the
+  status bar shows today's count and your current streak. Writing into a
+  chapter bumps the day's count automatically — no manual session tracking
+  required. The `~/.bookforge/<book>/stats.json` file holds your history.
+- **Distraction-free Focus mode** — click "Focus" in the editor toolbar, or
+  press `Cmd/Ctrl + .`. All chrome fades; ESC exits. Optionally enable
+  Typewriter mode (⌗) to keep the caret vertically centered.
+- **Warm onboarding library** — when no book is open, you land on a Library
+  view that greets you by time of day and nudges you with "X words to go today"
+  or "your N-day streak is waiting". Each book card shows a colored spine and
+  the last-modified date.
+- **Story Bible** — a new view (sidebar → "Story Bible") for keeping Characters,
+  Locations, and Notes alongside your manuscript. Each entity is stored as JSON
+  under `~/.bookforge/<book>/bible/` so it's plain-text and syncable.
+- **Progress dashboard** — sidebar → "Progress" shows an 8-week streak heatmap,
+  a 30-day words-per-day bar chart, today's goal ring, longest streak, total
+  words, and per-chapter word-count breakdown.
+- **Starter prompts** — a blank chapter shows four italic prompts ("Begin with
+  a sound…", "Start with the weather…") to lower the activation energy.
+- **Persistent UI preferences** — theme, font size, focus mode, sidebar
+  collapsed, AI panel open, terminal visibility. Saved via
+  `tauri-plugin-store` to `<app_data_dir>/bookforge-ui.json`.
+- **Keyboard shortcuts** — `Cmd/Ctrl + .` toggles focus mode, `Cmd/Ctrl + B`
+  toggles the sidebar, `ESC` exits focus mode.
+- **Terminal now hidden by default** — most novelists never need a terminal.
+  Toggle it from the prefs store if you do.
+
+### Filesystem layout (per book)
+
+```text
+~/.bookforge/<book-slug>/
+├── bookforge.json         # metadata (title, author, dailyGoal, …)
+├── chapters/*.md          # one file per chapter
+├── assets/                # cover, images
+├── exports/               # HTML/PDF/EPUB outputs
+├── bible/                 # NEW in v0.2
+│   ├── characters.json
+│   ├── locations.json
+│   └── notes.json
+└── stats.json             # NEW in v0.2 — daily progress + streaks
+```
+
+### New Tauri commands
+
+- `bible_list`, `bible_upsert_character`, `bible_delete_character`,
+  `bible_upsert_location`, `bible_delete_location`, `bible_upsert_note`,
+  `bible_delete_note` — Story Bible CRUD.
+- `writing_stats` — returns the full WritingStats summary (streak, totals,
+  daily history).
+- `record_session` — manually bump today's word count + minutes spent.
+  (Called automatically by `chapter_write` whenever word count increases.)
+- `prefs_load`, `prefs_save` — read/write UI preferences via the store plugin.
 
 ---
 
