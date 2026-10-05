@@ -31,14 +31,28 @@
   let terminalHeight = $state(220);
 
   onMount(async () => {
-    // Load persisted UI prefs first so the theme is applied before paint.
-    await loadPrefs();
-
-    await refreshModelStatus();
-    await refreshWorkspaceBooks();
-    const books = get(workspaceBooks);
-    if (!get(project) && books.length > 0) {
-      await openProjectFolder(books[0].root);
+    // Each Tauri call is wrapped in its own try/catch so a single
+    // failure (e.g. prefs_load if the Rust backend wasn't rebuilt with
+    // the new commands) doesn't kill the rest of the mount and leave
+    // a blank screen.
+    try {
+      await loadPrefs();
+    } catch (e) {
+      console.warn("loadPrefs failed:", e);
+    }
+    try {
+      await refreshModelStatus();
+    } catch (e) {
+      console.warn("refreshModelStatus failed:", e);
+    }
+    try {
+      await refreshWorkspaceBooks();
+      const books = get(workspaceBooks);
+      if (!get(project) && books.length > 0) {
+        await openProjectFolder(books[0].root);
+      }
+    } catch (e) {
+      console.warn("workspace load failed:", e);
     }
   });
 
@@ -110,8 +124,8 @@
     window.removeEventListener("keydown", onKeydown);
   });
 
-  let inWriterView = $derived($view === "writer" && !!get(project));
-  let inLibraryView = $derived($view === "library" || !get(project));
+  let inWriterView = $derived($view === "writer" && !!$project);
+  let inLibraryView = $derived($view === "library" || !$project);
 </script>
 
 {#if $inLibraryView}

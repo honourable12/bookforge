@@ -43,7 +43,7 @@ export const toast = writable<{ kind: "info" | "success" | "error"; msg: string 
 
 // ----- New in v0.2: navigation -----
 export type View = "library" | "writer" | "bible" | "stats";
-export const view = writable<View>("writer");
+export const view = writable<View>("library");
 export const activeBibleTab = writable<"characters" | "locations" | "notes">("characters");
 
 // ----- New in v0.2: UI preferences (persisted via backend tauri-plugin-store) -----
@@ -238,4 +238,12 @@ export async function refreshChapters() {
   if (!p) return;
   const chapters = await api.chapterList(p.root);
   project.set({ ...p, chapters });
+}
+
+// Apply default theme synchronously on module load (before first render).
+// loadPrefs() may override this later if the user has a saved preference.
+// This prevents a flash of unstyled content if the Tauri backend isn't
+// rebuilt with the new prefs_load command yet.
+if (typeof document !== "undefined") {
+  document.documentElement.setAttribute("data-theme", "sepia");
 }
