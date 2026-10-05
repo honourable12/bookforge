@@ -128,7 +128,7 @@
   let inLibraryView = $derived($view === "library" || !$project);
 </script>
 
-{#if $inLibraryView}
+{#if inLibraryView}
   <LibraryView />
   <StatusBar />
 {:else}
