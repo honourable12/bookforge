@@ -119,6 +119,60 @@ export interface StoryBible {
   notes: StoryNote[];
 }
 
+// ----- New in v0.2.1: Story Map — graph of relationships -----
+
+export type MapNodeKind = "character" | "location" | "note";
+
+export interface MapNode {
+  kind: MapNodeKind;
+  refId: string;       // Story Bible entity id
+  label: string;       // cached display label
+  color: string;
+  x: number;
+  y: number;
+}
+
+export interface MapEdge {
+  id: string;
+  fromId: string;      // node refId (entity id)
+  toId: string;        // node refId (entity id)
+  kind: string;        // e.g. "allies_with", "lives_in", "rival_of"
+  note: string;        // optional explanation
+}
+
+export interface MapNote {
+  id: string;
+  title: string;
+  content: string;
+  color: string;
+  x: number;
+  y: number;
+}
+
+export interface StoryMap {
+  nodes: MapNode[];
+  edges: MapEdge[];
+  notes: MapNote[];
+}
+
+export const EMPTY_STORY_MAP: StoryMap = { nodes: [], edges: [], notes: [] };
+
+// Common relationship kinds offered in the UI (writers can also type their own).
+export const COMMON_EDGE_KINDS = [
+  "allies_with",
+  "rival_of",
+  "lover_of",
+  "family_of",
+  "mentor_of",
+  "lives_in",
+  "appears_in",
+  "killed_by",
+  "hunts",
+  "haunted_by",
+  "owes_debt_to",
+  "betrayed_by",
+];
+
 // ----- New in v0.2: Writing progress -----
 
 export interface DailyProgress {

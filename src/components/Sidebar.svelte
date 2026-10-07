@@ -107,6 +107,7 @@
   let navItems = $derived([
     { id: "writer" as const, label: "Write", icon: "✎" },
     { id: "bible" as const, label: "Story Bible", icon: "📖" },
+    { id: "map" as const, label: "Story Map", icon: "🗺" },
     { id: "stats" as const, label: "Progress", icon: "📊" },
   ]);
 </script>

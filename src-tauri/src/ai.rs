@@ -100,14 +100,20 @@ pub fn build_chat_prompt(messages: &[ChatMessage]) -> String {
 }
 
 /// Build a prompt for "continue writing from here".
-pub fn build_continue_prompt(prefix: &str) -> String {
+/// If `story_map_context` is non-empty, it's injected into the system
+/// prompt so the LLM knows who's who and how they relate.
+pub fn build_continue_prompt(prefix: &str, story_map_context: &str) -> String {
     let mut msgs = Vec::new();
+    let mut system = String::from("You are a literary co-author. Continue the user's prose seamlessly in the same ");
+    system.push_str("voice, tense, and style. Do NOT add commentary, headers, or markdown. Output ");
+    system.push_str("ONLY the continuation.");
+    if !story_map_context.is_empty() {
+        system.push_str("\n\n");
+        system.push_str(story_map_context);
+    }
     msgs.push(ChatMessage {
         role: "system".into(),
-        content: "You are a literary co-author. Continue the user's prose seamlessly in the same \
-                  voice, tense, and style. Do NOT add commentary, headers, or markdown. Output \
-                  ONLY the continuation."
-            .into(),
+        content: system,
     });
     msgs.push(ChatMessage {
         role: "user".into(),
@@ -117,13 +123,19 @@ pub fn build_continue_prompt(prefix: &str) -> String {
 }
 
 /// Build a prompt for rewriting a selection.
-pub fn build_rewrite_prompt(selection: &str, instruction: &str) -> String {
+/// If `story_map_context` is non-empty, it's injected into the system
+/// prompt so the LLM stays consistent with the writer's canon.
+pub fn build_rewrite_prompt(selection: &str, instruction: &str, story_map_context: &str) -> String {
     let mut msgs = Vec::new();
+    let mut system = String::from("You are a literary editor. Rewrite the user's selection according to their ");
+    system.push_str("instruction. Output ONLY the rewritten passage, no commentary.");
+    if !story_map_context.is_empty() {
+        system.push_str("\n\n");
+        system.push_str(story_map_context);
+    }
     msgs.push(ChatMessage {
         role: "system".into(),
-        content: "You are a literary editor. Rewrite the user's selection according to their \
-                  instruction. Output ONLY the rewritten passage, no commentary."
-            .into(),
+        content: system,
     });
     msgs.push(ChatMessage {
         role: "user".into(),

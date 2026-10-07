@@ -1,6 +1,6 @@
 [package]
 name = "bookforge"
-version = "0.2.0"
+version = "0.2.1"
 description = "BookForge — a Tauri-based book writing IDE with embedded AI and REPL"
 authors = ["BookForge"]
 edition = "2021"

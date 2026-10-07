@@ -601,6 +601,223 @@ fn rand_like() -> u32 {
 }
 
 // ============================================
+// Story Map — graph of relationships between
+// Story Bible entities, used both as a visual
+// reference and as AI context for continue/rewrite.
+// ============================================
+
+/// A node in the story map — a reference to a Story Bible entity
+/// plus its visual position on the canvas (saved so the writer's
+/// layout persists).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MapNode {
+    /// "character" | "location" | "note"
+    pub kind: String,
+    /// The Story Bible entity id this node refers to.
+    pub ref_id: String,
+    /// Display label (cached so the map can render even if the bible
+    /// entity is later deleted — shows the label struck through).
+    pub label: String,
+    /// Color copied from the bible entity at creation time.
+    pub color: String,
+    /// X position on the canvas (px).
+    pub x: f64,
+    /// Y position on the canvas (px).
+    pub y: f64,
+}
+
+/// A typed relationship between two Story Bible entities.
+/// The `kind` is a freeform string so writers can invent their own
+/// verbs ("allies_with", "rival_of", "lives_in", "loves", "killed_by"),
+/// but a set of common defaults is offered in the UI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MapEdge {
+    pub id: String,
+    pub from_id: String, // node ref_id (entity id)
+    pub to_id: String,   // node ref_id (entity id)
+    pub kind: String,    // e.g. "allies_with", "lives_in"
+    pub note: String,    // optional short explanation
+}
+
+/// A freeform annotation attached to the map itself (themes, conflicts,
+/// the central question of the book).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MapNote {
+    pub id: String,
+    pub title: String,
+    pub content: String,
+    pub color: String,
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryMap {
+    pub nodes: Vec<MapNode>,
+    pub edges: Vec<MapEdge>,
+    pub notes: Vec<MapNote>,
+}
+
+fn story_map_path(root: &Path) -> PathBuf {
+    root.join("story_map.json")
+}
+
+pub fn read_story_map(root: &Path) -> Result<StoryMap, String> {
+    read_json_or_default::<StoryMap>(&story_map_path(root))
+}
+
+pub fn write_story_map(root: &Path, map: &StoryMap) -> Result<(), String> {
+    write_json(&story_map_path(root), map)
+}
+
+/// Serialize the story map into a compact text block suitable for
+/// injection into an LLM system prompt. Returns an empty string if
+/// the map has no entities.
+///
+/// Example output:
+///   STORY MAP (the writer's notes on characters, locations, and plot):
+///
+///   Characters:
+///   - Lira Whittaker (protagonist): stubborn, loyal, afraid of water.
+///   - Marcus Vale (mentor): retired lighthouse keeper.
+///
+///   Locations:
+///   - Saltmarsh: cold, lonely, salt on the wind.
+///
+///   Notes:
+///   - The unsent letters (theme): central mystery driving Lira's arc.
+///
+///   Relationships:
+///   - Lira Whittaker —allies with→ Marcus Vale
+///   - Lira Whittaker —lives in→ Saltmarsh
+///   - Lira Whittaker —rival of→ Captain Reed
+pub fn story_map_as_context(root: &Path) -> String {
+    let map = match read_story_map(root) {
+        Ok(m) => m,
+        Err(_) => return String::new(),
+    };
+    if map.nodes.is_empty() && map.notes.is_empty() {
+        return String::new();
+    }
+
+    // Enrich nodes with their full entity details from the bible so the
+    // LLM gets traits/descriptions, not just labels.
+    let bible = list_bible(root).unwrap_or(StoryBible {
+        characters: vec![],
+        locations: vec![],
+        notes: vec![],
+    });
+
+    let mut out = String::new();
+    out.push_str("STORY MAP (the writer's notes on characters, locations, and plot — use these as canon):\n\n");
+
+    // Group nodes by kind for readability.
+    let characters: Vec<&MapNode> = map.nodes.iter().filter(|n| n.kind == "character").collect();
+    let locations: Vec<&MapNode> = map.nodes.iter().filter(|n| n.kind == "location").collect();
+    let notes_nodes: Vec<&MapNode> = map.nodes.iter().filter(|n| n.kind == "note").collect();
+
+    if !characters.is_empty() {
+        out.push_str("Characters:\n");
+        for n in &characters {
+            let detail = bible
+                .characters
+                .iter()
+                .find(|c| c.id == n.ref_id);
+            if let Some(c) = detail {
+                let role = if c.role.is_empty() { "" } else { &c.role };
+                out.push_str(&format!("- {}{}: {}", n.label,
+                    if !role.is_empty() { format!(" ({})", role) } else { String::new() },
+                    if c.traits.is_empty() { c.description.clone() } else { c.traits.clone() }));
+                if !c.description.is_empty() && !c.traits.is_empty() {
+                    out.push_str(&format!(" {}", c.description));
+                }
+                out.push('\n');
+            } else {
+                out.push_str(&format!("- {} (character)\n", n.label));
+            }
+        }
+        out.push('\n');
+    }
+
+    if !locations.is_empty() {
+        out.push_str("Locations:\n");
+        for n in &locations {
+            let detail = bible
+                .locations
+                .iter()
+                .find(|l| l.id == n.ref_id);
+            if let Some(l) = detail {
+                let mood = if l.mood.is_empty() { String::new() } else { format!(" ({})", l.mood) };
+                out.push_str(&format!("- {}{}: {}\n", n.label, mood, l.description));
+            } else {
+                out.push_str(&format!("- {} (location)\n", n.label));
+            }
+        }
+        out.push('\n');
+    }
+
+    if !notes_nodes.is_empty() {
+        out.push_str("Plot notes (mapped):\n");
+        for n in &notes_nodes {
+            let detail = bible
+                .notes
+                .iter()
+                .find(|x| x.id == n.ref_id);
+            if let Some(nt) = detail {
+                out.push_str(&format!("- {} ({}): {}\n", n.label, nt.note_type, nt.content));
+            } else {
+                out.push_str(&format!("- {} (note)\n", n.label));
+            }
+        }
+        out.push('\n');
+    }
+
+    // Map-level freeform notes (themes etc.)
+    if !map.notes.is_empty() {
+        out.push_str("Themes & conflicts:\n");
+        for nt in &map.notes {
+            out.push_str(&format!("- {}: {}\n", nt.title, nt.content));
+        }
+        out.push('\n');
+    }
+
+    // Relationships — the actual graph edges.
+    if !map.edges.is_empty() {
+        out.push_str("Relationships:\n");
+        for e in &map.edges {
+            let from_label = map
+                .nodes
+                .iter()
+                .find(|n| n.ref_id == e.from_id)
+                .map(|n| n.label.as_str())
+                .unwrap_or("?");
+            let to_label = map
+                .nodes
+                .iter()
+                .find(|n| n.ref_id == e.to_id)
+                .map(|n| n.label.as_str())
+                .unwrap_or("?");
+            let verb = e.kind.replace('_', " ");
+            let note = if e.note.is_empty() {
+                String::new()
+            } else {
+                format!(" — {}", e.note)
+            };
+            out.push_str(&format!("- {} —{}→ {}{}\n", from_label, verb, to_label, note));
+        }
+        out.push('\n');
+    }
+
+    out.push_str("Use this map as canon. If you mention a character, location, or relationship, stay consistent with it. Do not introduce new named characters that aren't in the map unless the user's prompt explicitly asks for one.\n");
+
+    out
+}
+
+// ============================================
 // Writing progress (stats.json + daily tracking)
 // ============================================
 

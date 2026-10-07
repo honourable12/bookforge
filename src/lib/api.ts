@@ -14,6 +14,7 @@ import type {
   Location,
   WritingStats,
   UIPrefs,
+  StoryMap,
 } from "./types";
 
 export const api = {
@@ -28,15 +29,16 @@ export const api = {
   // AI
   aiChat: (requestId: string, messages: ChatMessage[], params?: GenParams) =>
     invoke<string>("ai_chat", { requestId, messages, params }),
-  aiContinue: (requestId: string, prefix: string, params?: GenParams) =>
-    invoke<string>("ai_continue", { requestId, prefix, params }),
+  aiContinue: (requestId: string, prefix: string, params?: GenParams, root?: string) =>
+    invoke<string>("ai_continue", { requestId, prefix, params, root }),
   aiRewrite: (
     requestId: string,
     selection: string,
     instruction: string,
     params?: GenParams,
+    root?: string,
   ) =>
-    invoke<string>("ai_rewrite", { requestId, selection, instruction, params }),
+    invoke<string>("ai_rewrite", { requestId, selection, instruction, params, root }),
   aiCancel: (requestId: string) => invoke<void>("ai_cancel", { requestId }),
 
   // Workspace & Books
@@ -93,6 +95,13 @@ export const api = {
     invoke<StoryNote>("bible_upsert_note", { root, note }),
   bibleDeleteNote: (root: string, id: string) =>
     invoke<void>("bible_delete_note", { root, id }),
+
+  // ----- New in v0.2.1: Story Map -----
+  storyMapGet: (root: string) => invoke<StoryMap>("story_map_get", { root }),
+  storyMapSave: (root: string, map: StoryMap) =>
+    invoke<void>("story_map_save", { root, map }),
+  storyMapPreviewContext: (root: string) =>
+    invoke<string>("story_map_preview_context", { root }),
 
   // ----- New in v0.2: Writing stats -----
   writingStats: (root: string) => invoke<WritingStats>("writing_stats", { root }),

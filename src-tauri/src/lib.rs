@@ -76,6 +76,10 @@ pub fn run() {
             commands::bible_delete_location,
             commands::bible_upsert_note,
             commands::bible_delete_note,
+            // story map (new in v0.2.1)
+            commands::story_map_get,
+            commands::story_map_save,
+            commands::story_map_preview_context,
             // writing stats (new in v0.2)
             commands::writing_stats,
             commands::record_session,

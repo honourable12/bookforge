@@ -240,7 +240,7 @@
     });
 
     try {
-      await api.aiContinue(requestId, prefix, $genParams);
+      await api.aiContinue(requestId, prefix, $genParams, $project?.root);
     } catch (e) {
       notify("error", `AI continue failed: ${e}`);
       isGenerating.set(false);
@@ -279,7 +279,7 @@
     });
 
     try {
-      await api.aiRewrite(requestId, sel, instruction, $genParams);
+      await api.aiRewrite(requestId, sel, instruction, $genParams, $project?.root);
     } catch (e) {
       notify("error", `AI rewrite failed: ${e}`);
       isGenerating.set(false);

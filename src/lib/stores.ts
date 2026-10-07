@@ -6,11 +6,12 @@ import type {
   ChatMessage,
   GenParams,
   StoryBible,
+  StoryMap,
   WritingStats,
   UIPrefs,
   Theme,
 } from "./types";
-import { DEFAULT_GEN_PARAMS, DEFAULT_UI_PREFS } from "./types";
+import { DEFAULT_GEN_PARAMS, DEFAULT_UI_PREFS, EMPTY_STORY_MAP } from "./types";
 import { api } from "./api";
 
 export const project = writable<ProjectTree | null>(null);
@@ -42,7 +43,7 @@ export const busy = writable<boolean>(false);
 export const toast = writable<{ kind: "info" | "success" | "error"; msg: string } | null>(null);
 
 // ----- New in v0.2: navigation -----
-export type View = "library" | "writer" | "bible" | "stats";
+export type View = "library" | "writer" | "bible" | "map" | "stats";
 export const view = writable<View>("library");
 export const activeBibleTab = writable<"characters" | "locations" | "notes">("characters");
 
@@ -145,6 +146,36 @@ export async function refreshStoryBible() {
   }
 }
 
+// ----- New in v0.2.1: Story Map store -----
+export const storyMap = writable<StoryMap>({ ...EMPTY_STORY_MAP });
+
+export async function refreshStoryMap() {
+  const p = get(project);
+  if (!p) {
+    storyMap.set({ ...EMPTY_STORY_MAP });
+    return;
+  }
+  try {
+    const m = await api.storyMapGet(p.root);
+    storyMap.set(m);
+  } catch (e) {
+    console.warn("story_map_get failed:", e);
+    storyMap.set({ ...EMPTY_STORY_MAP });
+  }
+}
+
+export async function saveStoryMap(map: StoryMap) {
+  const p = get(project);
+  if (!p) return;
+  try {
+    await api.storyMapSave(p.root, map);
+    storyMap.set(map);
+  } catch (e) {
+    console.warn("story_map_save failed:", e);
+    notify("error", `Failed to save story map: ${e}`);
+  }
+}
+
 // ----- New in v0.2: Writing stats store -----
 export const writingStats = writable<WritingStats | null>(null);
 
@@ -225,6 +256,7 @@ export async function openProjectFolder(root: string) {
     }
     await refreshWorkspaceBooks();
     await refreshStoryBible();
+    await refreshStoryMap();
     await refreshWritingStats();
     view.set("writer");
     notify("success", `Opened "${tree.meta.title}" (${tree.chapters.length} chapters)`);

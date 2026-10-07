@@ -9,6 +9,7 @@
   import StatusBar from "$components/StatusBar.svelte";
   import LibraryView from "$components/LibraryView.svelte";
   import StoryBible from "$components/StoryBible.svelte";
+  import StoryMap from "$components/StoryMap.svelte";
   import StatsView from "$components/StatsView.svelte";
   import ThemeSwitcher from "$components/ThemeSwitcher.svelte";
   import {
@@ -143,6 +144,7 @@
           <nav class="view-nav">
             <button class="nav-btn" class:active={$view === "writer"} onclick={() => view.set("writer")}>Write</button>
             <button class="nav-btn" class:active={$view === "bible"} onclick={() => view.set("bible")}>Story Bible</button>
+            <button class="nav-btn" class:active={$view === "map"} onclick={() => view.set("map")}>Story Map</button>
             <button class="nav-btn" class:active={$view === "stats"} onclick={() => view.set("stats")}>Progress</button>
           </nav>
           <div class="top-right">
@@ -168,6 +170,8 @@
         {/if}
       {:else if $view === "bible"}
         <StoryBible />
+      {:else if $view === "map"}
+        <StoryMap />
       {:else if $view === "stats"}
         <StatsView />
       {/if}

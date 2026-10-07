@@ -9,7 +9,7 @@ use crate::ai::{self, ChatMessage, GenParams, StreamChunk};
 use crate::export::{self, ExportResult};
 use crate::model;
 use crate::project::{
-    self, Character, Chapter, Location, ProjectMeta, ProjectTree, StoryBible, StoryNote, WritingStats,
+    self, Character, Chapter, Location, ProjectMeta, ProjectTree, StoryBible, StoryNote, StoryMap, MapNode, MapEdge, MapNote, WritingStats,
 };
 use crate::terminal::{self, SpawnOptions};
 use crate::prefs;
@@ -65,8 +65,15 @@ pub async fn ai_continue(
     request_id: String,
     prefix: String,
     params: Option<GenParams>,
+    root: Option<String>,
 ) -> Result<String, String> {
-    let prompt = ai::build_continue_prompt(&prefix);
+    // If the caller passed a project root, load the Story Map and inject it
+    // as context so the LLM knows who's who and how they relate.
+    let story_map_context = match root {
+        Some(r) => project::story_map_as_context(&PathBuf::from(r)),
+        None => String::new(),
+    };
+    let prompt = ai::build_continue_prompt(&prefix, &story_map_context);
     let params = params.unwrap_or_default();
     let result = tokio::task::spawn_blocking(move || {
         ai::run_completion(&app, &window, "ai_continue_chunk", &request_id, &prompt, &params)
@@ -84,8 +91,13 @@ pub async fn ai_rewrite(
     selection: String,
     instruction: String,
     params: Option<GenParams>,
+    root: Option<String>,
 ) -> Result<String, String> {
-    let prompt = ai::build_rewrite_prompt(&selection, &instruction);
+    let story_map_context = match root {
+        Some(r) => project::story_map_as_context(&PathBuf::from(r)),
+        None => String::new(),
+    };
+    let prompt = ai::build_rewrite_prompt(&selection, &instruction, &story_map_context);
     let params = params.unwrap_or_default();
     let result = tokio::task::spawn_blocking(move || {
         ai::run_completion(&app, &window, "ai_rewrite_chunk", &request_id, &prompt, &params)
@@ -210,6 +222,25 @@ pub fn bible_upsert_note(root: String, note: StoryNote) -> Result<StoryNote, Str
 #[tauri::command]
 pub fn bible_delete_note(root: String, id: String) -> Result<(), String> {
     project::delete_note(&PathBuf::from(root), &id)
+}
+
+// ---------------------------------------------------------------------------
+// Story Map — graph of relationships (new in v0.2.1)
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn story_map_get(root: String) -> Result<StoryMap, String> {
+    project::read_story_map(&PathBuf::from(root))
+}
+
+#[tauri::command]
+pub fn story_map_save(root: String, map: StoryMap) -> Result<(), String> {
+    project::write_story_map(&PathBuf::from(root), &map)
+}
+
+#[tauri::command]
+pub fn story_map_preview_context(root: String) -> Result<String, String> {
+    Ok(project::story_map_as_context(&PathBuf::from(root)))
 }
 
 // ---------------------------------------------------------------------------
