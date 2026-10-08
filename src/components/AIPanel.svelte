@@ -151,7 +151,7 @@ MANDATORY RULES:
     }
 
     try {
-      await api.aiChat(currentRequestId, apiMessages, get(genParams));
+      await api.aiChat(currentRequestId, apiMessages, get(genParams), $project?.root);
     } catch (e) {
       notify("error", `AI chat failed: ${e}`);
       isGenerating.set(false);

@@ -27,8 +27,8 @@ export const api = {
   modelLoad: () => invoke<string>("model_load"),
 
   // AI
-  aiChat: (requestId: string, messages: ChatMessage[], params?: GenParams) =>
-    invoke<string>("ai_chat", { requestId, messages, params }),
+  aiChat: (requestId: string, messages: ChatMessage[], params?: GenParams, root?: string) =>
+    invoke<string>("ai_chat", { requestId, messages, params, root }),
   aiContinue: (requestId: string, prefix: string, params?: GenParams, root?: string) =>
     invoke<string>("ai_continue", { requestId, prefix, params, root }),
   aiRewrite: (

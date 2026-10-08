@@ -65,7 +65,13 @@ Do NOT produce meta-analysis, chapter outlines, or bulleted character analyses u
 specifically asks for an outline or plan.";
 
 /// Build a Qwen2.5 chat-format prompt from a list of messages.
-pub fn build_chat_prompt(messages: &[ChatMessage]) -> String {
+///
+/// If `story_map_context` is non-empty, it's appended to the system
+/// message — whether that's the default `QWEN_SYSTEM` or an explicit
+/// system message provided by the caller (e.g. the "Write to Book"
+/// story-prose system prompt). This way the story map is canon for
+/// every AI interaction: chat, continue, rewrite, and write-to-book.
+pub fn build_chat_prompt(messages: &[ChatMessage], story_map_context: &str) -> String {
     let mut out = String::new();
     let mut has_system = false;
     for m in messages {
@@ -74,6 +80,13 @@ pub fn build_chat_prompt(messages: &[ChatMessage]) -> String {
                 has_system = true;
                 out.push_str("<|im_start|>system\n");
                 out.push_str(&m.content);
+                // Append the story map context to the explicit system
+                // message so the LLM treats it as canon alongside the
+                // caller's instructions.
+                if !story_map_context.is_empty() {
+                    out.push_str("\n\n");
+                    out.push_str(story_map_context);
+                }
                 out.push_str("<|im_end|>\n");
             }
             "user" => {
@@ -92,6 +105,10 @@ pub fn build_chat_prompt(messages: &[ChatMessage]) -> String {
     if !has_system {
         let mut prefix = String::from("<|im_start|>system\n");
         prefix.push_str(QWEN_SYSTEM);
+        if !story_map_context.is_empty() {
+            prefix.push_str("\n\n");
+            prefix.push_str(story_map_context);
+        }
         prefix.push_str("<|im_end|>\n");
         out.insert_str(0, &prefix);
     }
@@ -104,22 +121,19 @@ pub fn build_chat_prompt(messages: &[ChatMessage]) -> String {
 /// prompt so the LLM knows who's who and how they relate.
 pub fn build_continue_prompt(prefix: &str, story_map_context: &str) -> String {
     let mut msgs = Vec::new();
-    let mut system = String::from("You are a literary co-author. Continue the user's prose seamlessly in the same ");
-    system.push_str("voice, tense, and style. Do NOT add commentary, headers, or markdown. Output ");
-    system.push_str("ONLY the continuation.");
-    if !story_map_context.is_empty() {
-        system.push_str("\n\n");
-        system.push_str(story_map_context);
-    }
+    let system = "You are a literary co-author. Continue the user's prose seamlessly in the same \
+                  voice, tense, and style. Do NOT add commentary, headers, or markdown. Output \
+                  ONLY the continuation.";
     msgs.push(ChatMessage {
         role: "system".into(),
-        content: system,
+        content: system.into(),
     });
     msgs.push(ChatMessage {
         role: "user".into(),
         content: format!("Continue this passage:\n\n```\n{}\n```", prefix),
     });
-    build_chat_prompt(&msgs)
+    // story_map_context is appended to the system message by build_chat_prompt.
+    build_chat_prompt(&msgs, story_map_context)
 }
 
 /// Build a prompt for rewriting a selection.
@@ -127,15 +141,11 @@ pub fn build_continue_prompt(prefix: &str, story_map_context: &str) -> String {
 /// prompt so the LLM stays consistent with the writer's canon.
 pub fn build_rewrite_prompt(selection: &str, instruction: &str, story_map_context: &str) -> String {
     let mut msgs = Vec::new();
-    let mut system = String::from("You are a literary editor. Rewrite the user's selection according to their ");
-    system.push_str("instruction. Output ONLY the rewritten passage, no commentary.");
-    if !story_map_context.is_empty() {
-        system.push_str("\n\n");
-        system.push_str(story_map_context);
-    }
+    let system = "You are a literary editor. Rewrite the user's selection according to their \
+                  instruction. Output ONLY the rewritten passage, no commentary.";
     msgs.push(ChatMessage {
         role: "system".into(),
-        content: system,
+        content: system.into(),
     });
     msgs.push(ChatMessage {
         role: "user".into(),
@@ -144,7 +154,8 @@ pub fn build_rewrite_prompt(selection: &str, instruction: &str, story_map_contex
             instruction, selection
         ),
     });
-    build_chat_prompt(&msgs)
+    // story_map_context is appended to the system message by build_chat_prompt.
+    build_chat_prompt(&msgs, story_map_context)
 }
 
 /// Look up the LlamaToken for a string like `"<|im_end|>"`. Returns 0 if the

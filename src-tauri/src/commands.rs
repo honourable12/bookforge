@@ -47,8 +47,16 @@ pub async fn ai_chat(
     request_id: String,
     messages: Vec<ChatMessage>,
     params: Option<GenParams>,
+    root: Option<String>,
 ) -> Result<String, String> {
-    let prompt = ai::build_chat_prompt(&messages);
+    // If the caller passed a project root, load the Story Map and inject it
+    // as context so the LLM knows who's who and how they relate — for
+    // chat, write-to-book, and every other assistant interaction.
+    let story_map_context = match root {
+        Some(r) => project::story_map_as_context(&PathBuf::from(r)),
+        None => String::new(),
+    };
+    let prompt = ai::build_chat_prompt(&messages, &story_map_context);
     let params = params.unwrap_or_default();
     let result = tokio::task::spawn_blocking(move || {
         ai::run_completion(&app, &window, "ai_chat_chunk", &request_id, &prompt, &params)
