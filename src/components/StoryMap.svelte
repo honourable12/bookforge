@@ -187,7 +187,7 @@
       return;
     }
     const m = get(storyMap);
-    // Don't duplicate the exact same edge.
+    
     const exists = m.edges.find(
       (e) =>
         e.fromId === connecting!.fromId &&
@@ -195,7 +195,7 @@
         e.kind === edgeKindDraft,
     );
     if (exists) {
-      notify("info", "That relationship already exists.");
+      notify("info", "That exact relationship already exists.");
       connecting = null;
       return;
     }
@@ -384,12 +384,20 @@
     <!-- Edge kind selector (used when drawing new edges) -->
     <div class="edge-toolbar">
       <span class="edge-label">New relationship:</span>
-      <select bind:value={edgeKindDraft}>
+      <select
+        value={edgeKindDraft}
+        onchange={(e) => (edgeKindDraft = (e.currentTarget as HTMLSelectElement).value)}
+      >
         {#each COMMON_EDGE_KINDS as k}
-          <option value={k}>{k.replace(/_/g, " ")}</option>
+          <option value={k} selected={k === edgeKindDraft}>{k.replace(/_/g, " ")}</option>
         {/each}
       </select>
-      <input bind:value={edgeNoteDraft} placeholder="optional note" class="edge-note-input" />
+      <input
+        value={edgeNoteDraft}
+        oninput={(e) => (edgeNoteDraft = (e.currentTarget as HTMLInputElement).value)}
+        placeholder="optional note"
+        class="edge-note-input"
+      />
       <span class="edge-hint">Drag from a node's ◉ to another to connect them.</span>
     </div>
 
@@ -505,6 +513,7 @@
           <g
             class="map-node"
             onmousedown={(e) => onNodeMouseDown(e, node)}
+            onmouseup={(e) => { e.stopPropagation(); onNodeConnectEnd(node); }}
             transform="translate({node.x}, {node.y})"
           >
             <!-- main circle -->
